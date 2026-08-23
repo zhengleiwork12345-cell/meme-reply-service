@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { JimengMemeGenerator } from './generator.js';
 
 const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0]);
-const input = { source: { bytes: png, mimeType: 'image/png' as const, filename: 'source.png' }, mood: '反击' as const, replyText: '收到' };
+const input = { source: { bytes: png, mimeType: 'image/png' as const, filename: 'source.png' }, mood: '反击' as const, replyText: '收到', contextText: '对方说今天又加班' };
 
 describe('JimengMemeGenerator', () => {
   it('sends one reference image and returns the Base64 result without storing it', async () => {
@@ -12,6 +12,7 @@ describe('JimengMemeGenerator', () => {
     await expect(generator.generate(input)).resolves.toEqual({ mimeType: 'image/png', imageBase64: png.toString('base64') });
     expect(calls).toBe(1);
     expect(JSON.parse(options?.body as string)).toMatchObject({ model: 'ep-test', image: [`data:image/png;base64,${png.toString('base64')}`], response_format: 'b64_json', sequential_image_generation: 'disabled' });
+    expect(JSON.parse(options?.body as string).prompt).toContain('对方说今天又加班');
     expect(options?.headers).toMatchObject({ Authorization: 'Bearer ark-secret' });
   });
 

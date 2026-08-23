@@ -59,6 +59,6 @@ docker run -d --name meme-reply-service --restart unless-stopped --env-file /opt
 - `GET /health` → `{ "ok": true }`
 - `POST /auth/register`：邮箱、至少 10 位密码、设备 UUID 与注册邀请码。
 - `POST /auth/login` / `POST /auth/refresh`：获取或轮换 JWT 会话。
-- `POST /v1/meme-replies`：`multipart/form-data`，字段 `source`（PNG/JPEG，≤5 MB）、`mood`、可选 `replyText`（≤30 字），以及 `Authorization: Bearer <JWT>`。
+- `POST /v1/meme-replies`：`multipart/form-data`，字段 `source`（PNG/JPEG，≤5 MB）、`mood`、可选 `replyText`（≤30 字）、可选 `contextText`（≤240 字），以及 `Authorization: Bearer <JWT>`。上下文只在本次即梦请求中使用，不写入数据库或服务日志。
 - 成功：`{ requestId, mimeType: "image/png" | "image/jpeg" | "image/webp", imageBase64 }`。
 - 失败：`{ requestId, code, message }`；使用 400、401、429、502 或 503，且不会回传即梦上游原始错误。

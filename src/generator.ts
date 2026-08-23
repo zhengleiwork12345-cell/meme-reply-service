@@ -51,5 +51,5 @@ function detectMimeType(base64: string): 'image/jpeg' | 'image/png' | 'image/web
 }
 
 function promptFor(input: GenerationRequest): string {
-  return `基于参考表情图，创作一张正方形、适合聊天回复的幽默中文回击表情。情绪：${input.mood}。${input.replyText ? `自然融入这句简短回击语：“${input.replyText}”。` : '除非能明显增强笑点，否则不要添加可读文字。'} 保持轻松、不针对特定个人；不要生成真人肖像、公众人物、色情、仇恨、威胁、骚扰、违法内容或受版权保护角色，也不要保留参考图中的人脸。`;
+  return `基于参考表情图，创作一张正方形、适合聊天回复的幽默中文回击表情。情绪：${input.mood}。${input.contextText ? `仅作为理解语境的临时参考：${input.contextText}。不要逐字复刻其中内容。` : ''}${input.replyText ? `自然融入这句简短回击语：“${input.replyText}”。` : '除非能明显增强笑点，否则不要添加可读文字。'} 保持轻松、不针对特定个人；不要生成真人肖像、公众人物、色情、仇恨、威胁、骚扰、违法内容或受版权保护角色，也不要保留参考图中的人脸。`;
 }
