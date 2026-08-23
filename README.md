@@ -40,6 +40,20 @@ docker run -d --name meme-reply-service --restart unless-stopped --env-file /opt
 
 图像提供商为火山引擎方舟的即梦同源 Seedream；`ARK_IMAGE_MODEL` 可填写官方模型 ID，或你在方舟控制台创建的推理接入点 ID。后端以 `b64_json` 接收结果后直接返回给 App，不使用结果 URL，因此不会在你的服务器持久化图片。即梦参考图目前仅接收 PNG 或 JPEG，单张上传仍限制为 5 MB。
 
+## 发布到 Docker Hub
+
+仓库包含 GitHub Actions 工作流 `.github/workflows/publish-dockerhub.yml`。先在 Docker Hub 创建一个名为 `meme-reply-service` 的仓库，再在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 添加：
+
+- `DOCKERHUB_USERNAME`：Docker Hub 用户名。
+- `DOCKERHUB_TOKEN`：Docker Hub 创建的仅用于此仓库、具有 Read & Write 权限的 Personal Access Token。
+
+配置完成后，推送到 `main` 会自动发布 `DOCKERHUB_USERNAME/meme-reply-service:latest` 和不可变的 `sha-<提交短哈希>` 标签；也可在 GitHub Actions 页面手动运行 **Publish Docker image**。Docker 主机部署时执行：
+
+```bash
+docker pull DOCKERHUB_USERNAME/meme-reply-service:latest
+docker run -d --name meme-reply-service --restart unless-stopped --env-file /opt/meme-reply-service/runtime.env -p 8080:8080 DOCKERHUB_USERNAME/meme-reply-service:latest
+```
+
 ## HTTP 合约
 
 - `GET /health` → `{ "ok": true }`
