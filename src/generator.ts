@@ -8,6 +8,14 @@ export interface MemeGenerator {
 type Fetcher = typeof fetch;
 type ArkImageResponse = { data?: Array<{ b64_json?: string }> };
 
+/** A sanitized provider failure: its HTTP status is safe to log, never its body. */
+export class ArkProviderError extends Error {
+  constructor(readonly status: number) {
+    super(`Jimeng API returned HTTP ${status}.`);
+    this.name = 'ArkProviderError';
+  }
+}
+
 /** Official Volcano Engine Ark / Jimeng compatible image-generation endpoint. */
 export class JimengMemeGenerator implements MemeGenerator {
   readonly model: string;
@@ -27,12 +35,15 @@ export class JimengMemeGenerator implements MemeGenerator {
         model: this.model,
         prompt: promptFor(input),
         image: [image],
-        size: '1024x1024',
+        // Seedream 5.0 Pro uses the documented short size syntax. The result remains
+        // suitable for a square meme because the prompt explicitly requests one.
+        size: '2K',
         response_format: 'b64_json',
-        sequential_image_generation: 'disabled',
+        stream: false,
+        watermark: true,
       }),
     });
-    if (!response.ok) throw new Error(`Jimeng API returned HTTP ${response.status}.`);
+    if (!response.ok) throw new ArkProviderError(response.status);
     const result = await response.json() as ArkImageResponse;
     const imageBase64 = result.data?.[0]?.b64_json;
     if (!imageBase64) throw new Error('Jimeng API did not return an image.');
