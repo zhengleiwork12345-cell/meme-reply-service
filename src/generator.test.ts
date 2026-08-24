@@ -11,8 +11,9 @@ describe('JimengMemeGenerator', () => {
     const generator = new JimengMemeGenerator('ark-secret', 'ep-test', fetcher);
     await expect(generator.generate(input)).resolves.toEqual({ mimeType: 'image/png', imageBase64: png.toString('base64') });
     expect(calls).toBe(1);
-    expect(JSON.parse(options?.body as string)).toMatchObject({ model: 'ep-test', image: [`data:image/png;base64,${png.toString('base64')}`], response_format: 'b64_json', size: '2K', stream: false, watermark: true });
+    expect(JSON.parse(options?.body as string)).toMatchObject({ model: 'ep-test', image: [`data:image/png;base64,${png.toString('base64')}`], response_format: 'b64_json', size: '2K', watermark: true });
     expect(JSON.parse(options?.body as string)).not.toHaveProperty('sequential_image_generation');
+    expect(JSON.parse(options?.body as string)).not.toHaveProperty('stream');
     expect(JSON.parse(options?.body as string).prompt).toContain('对方说今天又加班');
     expect(options?.headers).toMatchObject({ Authorization: 'Bearer ark-secret' });
   });
