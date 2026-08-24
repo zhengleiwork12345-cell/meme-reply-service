@@ -39,7 +39,6 @@ export class JimengMemeGenerator implements MemeGenerator {
         // suitable for a square meme because the prompt explicitly requests one.
         size: '2K',
         response_format: 'b64_json',
-        stream: false,
         watermark: true,
       }),
     });
