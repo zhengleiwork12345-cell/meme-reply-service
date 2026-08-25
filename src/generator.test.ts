@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { JimengMemeGenerator } from './generator.js';
+import { ArkTimeoutError, JimengMemeGenerator } from './generator.js';
 
 const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0]);
 const input = { source: { bytes: png, mimeType: 'image/png' as const, filename: 'source.png' }, mood: '反击' as const, replyText: '收到', contextText: '对方说今天又加班' };
@@ -22,5 +22,11 @@ describe('JimengMemeGenerator', () => {
     const fetcher: typeof fetch = async () => new Response('{"error":"provider detail"}', { status: 429 });
     const generator = new JimengMemeGenerator('ark-secret', 'ep-test', fetcher);
     await expect(generator.generate(input)).rejects.toThrow('HTTP 429');
+  });
+
+  it('maps an Ark timeout to a safe error category', async () => {
+    const fetcher: typeof fetch = async () => { throw Object.assign(new Error('provider detail'), { name: 'TimeoutError' }); };
+    const generator = new JimengMemeGenerator('ark-secret', 'ep-test', fetcher);
+    await expect(generator.generate(input)).rejects.toBeInstanceOf(ArkTimeoutError);
   });
 });

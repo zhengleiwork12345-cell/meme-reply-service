@@ -16,6 +16,22 @@ export class ArkProviderError extends Error {
   }
 }
 
+/** The provider did not answer within the bounded server-side request window. */
+export class ArkTimeoutError extends Error {
+  constructor() {
+    super('Jimeng API request timed out.');
+    this.name = 'ArkTimeoutError';
+  }
+}
+
+/** A connection-level provider failure. The original transport detail is never logged or returned. */
+export class ArkNetworkError extends Error {
+  constructor() {
+    super('Jimeng API network request failed.');
+    this.name = 'ArkNetworkError';
+  }
+}
+
 /** Official Volcano Engine Ark / Jimeng compatible image-generation endpoint. */
 export class JimengMemeGenerator implements MemeGenerator {
   readonly model: string;
@@ -24,24 +40,32 @@ export class JimengMemeGenerator implements MemeGenerator {
     model: string,
     private readonly fetcher: Fetcher = fetch,
     private readonly baseUrl = 'https://ark.cn-beijing.volces.com/api/v3',
+    private readonly timeoutMs = 90_000,
   ) { this.model = model; }
 
   async generate(input: GenerationRequest) {
     const image = `data:${input.source.mimeType};base64,${input.source.bytes.toString('base64')}`;
-    const response = await this.fetcher(`${this.baseUrl}/images/generations`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.model,
-        prompt: promptFor(input),
-        image: [image],
-        // Seedream 5.0 Pro uses the documented short size syntax. The result remains
-        // suitable for a square meme because the prompt explicitly requests one.
-        size: '2K',
-        response_format: 'b64_json',
-        watermark: true,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await this.fetcher(`${this.baseUrl}/images/generations`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.model,
+          prompt: promptFor(input),
+          image: [image],
+          // Seedream 5.0 Pro uses the documented short size syntax. The result remains
+          // suitable for a square meme because the prompt explicitly requests one.
+          size: '2K',
+          response_format: 'b64_json',
+          watermark: true,
+        }),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (error) {
+      if (isTimeout(error)) throw new ArkTimeoutError();
+      throw new ArkNetworkError();
+    }
     if (!response.ok) throw new ArkProviderError(response.status);
     const result = await response.json() as ArkImageResponse;
     const imageBase64 = result.data?.[0]?.b64_json;
@@ -50,6 +74,11 @@ export class JimengMemeGenerator implements MemeGenerator {
     if (!mimeType) throw new Error('Jimeng API returned an unsupported image format.');
     return { mimeType, imageBase64 };
   }
+}
+
+function isTimeout(error: unknown) {
+  return typeof error === 'object' && error !== null && 'name' in error &&
+    ((error as { name?: unknown }).name === 'TimeoutError' || (error as { name?: unknown }).name === 'AbortError');
 }
 
 function detectMimeType(base64: string): 'image/jpeg' | 'image/png' | 'image/webp' | undefined {
