@@ -40,7 +40,7 @@ export class JimengMemeGenerator implements MemeGenerator {
     model: string,
     private readonly fetcher: Fetcher = fetch,
     private readonly baseUrl = 'https://ark.cn-beijing.volces.com/api/v3',
-    private readonly timeoutMs = 90_000,
+    private readonly timeoutMs = configuredTimeoutMs(),
   ) { this.model = model; }
 
   async generate(input: GenerationRequest) {
@@ -74,6 +74,15 @@ export class JimengMemeGenerator implements MemeGenerator {
     if (!mimeType) throw new Error('Jimeng API returned an unsupported image format.');
     return { mimeType, imageBase64 };
   }
+}
+
+/**
+ * Seedream's synchronous 2K generation can legitimately exceed one minute.
+ * Allow an operator override without accepting an unbounded request lifetime.
+ */
+function configuredTimeoutMs() {
+  const value = Number(process.env.ARK_TIMEOUT_MS || 180_000);
+  return Number.isInteger(value) && value >= 30_000 && value <= 300_000 ? value : 180_000;
 }
 
 function isTimeout(error: unknown) {
