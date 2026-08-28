@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
-import { formSchema, type ErrorResponse, type GenerationRequest, type GenerationResponse } from './contracts.js';
+import { base64GenerationSchema, formSchema, type ErrorResponse, type GenerationRequest, type GenerationResponse } from './contracts.js';
 import type { AuthService } from './auth.js';
 import type { AuthStore } from './database.js';
 import { ServiceError, invalid } from './errors.js';
@@ -22,7 +22,7 @@ const accepted = new Set(['image/jpeg', 'image/png']);
 export function createApp(deps: Dependencies) {
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '16kb' }));
+  app.use('/auth', express.json({ limit: '16kb' }));
   app.get('/health', (_req, res) => res.status(200).json({ ok: true, serviceBuild: SERVICE_BUILD_ID }));
   app.post('/auth/register', wrap(async req => deps.auth.register(req.body)));
   app.post('/auth/login', wrap(async req => deps.auth.login(req.body)));
@@ -68,6 +68,39 @@ export function createApp(deps: Dependencies) {
       if (principal) {
         void deps.store.logGeneration({ requestId, userId: principal.userId, deviceId: principal.deviceId, status: 'failed', elapsedMs: Date.now() - started, model: deps.generator.model }).catch(() => undefined);
       }
+      next(withRequestId(error, requestId, started, deps, req.path));
+    }
+  });
+
+  // Android's native multipart implementation is unreliable on some HTTP-only
+  // test networks. This route is a guarded fallback, never a public image store.
+  app.post('/v1/meme-replies/base64', express.json({ limit: '7mb' }), async (req, res, next) => {
+    const requestId = randomUUID();
+    const started = Date.now();
+    let principal: { userId: string; deviceId: string } | undefined;
+    deps.log?.({ requestId, route: req.path, phase: 'request_started', transport: 'base64' });
+    try {
+      principal = await deps.auth.verifyBearer(req.header('authorization'));
+      const parsed = base64GenerationSchema.safeParse(req.body);
+      if (!parsed.success) throw invalid('图片、情绪或自定义回击语无效。');
+      const bytes = decodeBase64Image(parsed.data.sourceBase64);
+      if (bytes.length > 5 * 1024 * 1024 || !hasMatchingSignature(bytes, parsed.data.sourceMimeType)) {
+        throw invalid('即梦参考图仅支持不超过 5 MB 的 PNG 或 JPEG 图片。');
+      }
+      deps.log?.({ requestId, route: req.path, phase: 'generation_started', transport: 'base64' });
+      const result = await deps.generator.generate({
+        source: { bytes, mimeType: parsed.data.sourceMimeType, filename: parsed.data.sourceMimeType === 'image/png' ? 'source.png' : 'source.jpg' },
+        mood: parsed.data.mood,
+        replyText: parsed.data.replyText,
+        contextText: parsed.data.contextText,
+      });
+      const elapsedMs = Date.now() - started;
+      await deps.store.logGeneration({ requestId, userId: principal.userId, deviceId: principal.deviceId, status: 'success', elapsedMs, model: deps.generator.model });
+      deps.log?.({ requestId, route: req.path, phase: 'request_finished', status: 200, elapsedMs, transport: 'base64' });
+      const body: GenerationResponse = { requestId, ...result };
+      res.status(200).json(body);
+    } catch (error) {
+      if (principal) void deps.store.logGeneration({ requestId, userId: principal.userId, deviceId: principal.deviceId, status: 'failed', elapsedMs: Date.now() - started, model: deps.generator.model }).catch(() => undefined);
       next(withRequestId(error, requestId, started, deps, req.path));
     }
   });
@@ -125,4 +158,10 @@ function hasMatchingSignature(bytes: Buffer, mimeType: string) {
   if (mimeType === 'image/png') return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   if (mimeType === 'image/jpeg') return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
   return false;
+}
+
+function decodeBase64Image(value: string) {
+  // Buffer accepts malformed Base64 silently; reject it before decoding.
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) throw invalid('图片编码无效。');
+  return Buffer.from(value, 'base64');
 }
